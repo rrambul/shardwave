@@ -1,7 +1,8 @@
-package identity
+package peer
 
 import (
 	"crypto/ed25519"
+	"crypto/rand"
 	"errors"
 	"os"
 	"path/filepath"
@@ -12,33 +13,42 @@ import (
 
 func mustGenerate(t *testing.T) *Identity {
 	t.Helper()
-	id, err := Generate()
+	k, err := Generate()
 	if err != nil {
 		t.Fatalf("Generate: %v", err)
 	}
-	return id
+	return k
 }
 
 func TestGenerateProducesDistinctIdentities(t *testing.T) {
 	a, b := mustGenerate(t), mustGenerate(t)
-	if a.PeerID() == b.PeerID() {
-		t.Fatalf("two generated identities share PeerID %s", a.PeerID())
+	if a.ID() == b.ID() {
+		t.Fatalf("two generated identities share ID %s", a.ID())
 	}
 }
 
-func TestPeerIDIsDerivedFromPublicKey(t *testing.T) {
-	id := mustGenerate(t)
-
-	if got, want := id.PeerID(), PeerIDFromPublicKey(id.PublicKey()); got != want {
-		t.Fatalf("PeerID() = %s, want %s", got, want)
+func TestIDIsDerivedFromPublicKey(t *testing.T) {
+	k := mustGenerate(t)
+	if got, want := k.ID(), IDFromPublicKey(k.PublicKey()); got != want {
+		t.Fatalf("ID() = %s, want %s", got, want)
 	}
+}
 
-	again, err := FromSeed(id.priv.Seed())
+func TestFromSeedIsDeterministic(t *testing.T) {
+	seed := make([]byte, ed25519.SeedSize)
+	if _, err := rand.Read(seed); err != nil {
+		t.Fatal(err)
+	}
+	a, err := FromSeed(seed)
 	if err != nil {
 		t.Fatalf("FromSeed: %v", err)
 	}
-	if again.PeerID() != id.PeerID() {
-		t.Fatalf("FromSeed gave PeerID %s, want %s", again.PeerID(), id.PeerID())
+	b, err := FromSeed(seed)
+	if err != nil {
+		t.Fatalf("FromSeed: %v", err)
+	}
+	if a.ID() != b.ID() {
+		t.Fatalf("FromSeed(seed) twice gave IDs %s and %s, want equal", a.ID(), b.ID())
 	}
 }
 
@@ -51,9 +61,9 @@ func TestFromSeedRejectsWrongLength(t *testing.T) {
 }
 
 func TestSignVerify(t *testing.T) {
-	id, other := mustGenerate(t), mustGenerate(t)
+	k, other := mustGenerate(t), mustGenerate(t)
 	msg := []byte("shardwave")
-	sig := id.Sign(msg)
+	sig := k.Sign(msg)
 
 	tests := []struct {
 		name string
@@ -62,10 +72,10 @@ func TestSignVerify(t *testing.T) {
 		sig  []byte
 		want bool
 	}{
-		{"valid", id.PublicKey(), msg, sig, true},
-		{"tampered message", id.PublicKey(), []byte("shardwavE"), sig, false},
+		{"valid", k.PublicKey(), msg, sig, true},
+		{"tampered message", k.PublicKey(), []byte("shardwavE"), sig, false},
 		{"wrong key", other.PublicKey(), msg, sig, false},
-		{"truncated signature", id.PublicKey(), msg, sig[:10], false},
+		{"truncated signature", k.PublicKey(), msg, sig[:10], false},
 		{"malformed public key must not panic", ed25519.PublicKey("short"), msg, sig, false},
 	}
 	for _, tt := range tests {
@@ -77,8 +87,8 @@ func TestSignVerify(t *testing.T) {
 	}
 }
 
-func TestPeerIDStringRoundTrip(t *testing.T) {
-	id := mustGenerate(t).PeerID()
+func TestIDStringRoundTrip(t *testing.T) {
+	id := mustGenerate(t).ID()
 	s := id.String()
 
 	if len(s) != 64 {
@@ -88,16 +98,16 @@ func TestPeerIDStringRoundTrip(t *testing.T) {
 		t.Errorf("Short() = %q, want %q", short, s[:8])
 	}
 
-	parsed, err := ParsePeerID(s)
+	parsed, err := ParseID(s)
 	if err != nil {
-		t.Fatalf("ParsePeerID(%q): %v", s, err)
+		t.Fatalf("ParseID(%q): %v", s, err)
 	}
 	if parsed != id {
-		t.Fatalf("ParsePeerID round-trip = %s, want %s", parsed, id)
+		t.Fatalf("ParseID round-trip = %s, want %s", parsed, id)
 	}
 }
 
-func TestParsePeerIDRejectsBadInput(t *testing.T) {
+func TestParseIDRejectsBadInput(t *testing.T) {
 	tests := []struct{ name, in string }{
 		{"empty", ""},
 		{"not hex", strings.Repeat("zz", 32)},
@@ -106,26 +116,26 @@ func TestParsePeerIDRejectsBadInput(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if _, err := ParsePeerID(tt.in); err == nil {
-				t.Errorf("ParsePeerID(%q) = nil error, want error", tt.in)
+			if _, err := ParseID(tt.in); err == nil {
+				t.Errorf("ParseID(%q) = nil error, want error", tt.in)
 			}
 		})
 	}
 }
 
 func TestSaveLoadRoundTrip(t *testing.T) {
-	id := mustGenerate(t)
+	k := mustGenerate(t)
 	path := filepath.Join(t.TempDir(), "node.key")
 
-	if err := id.Save(path); err != nil {
+	if err := k.Save(path); err != nil {
 		t.Fatalf("Save: %v", err)
 	}
 	loaded, err := Load(path)
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
-	if loaded.PeerID() != id.PeerID() {
-		t.Fatalf("Load gave PeerID %s, want %s", loaded.PeerID(), id.PeerID())
+	if loaded.ID() != k.ID() {
+		t.Fatalf("Load gave ID %s, want %s", loaded.ID(), k.ID())
 	}
 
 	if runtime.GOOS != "windows" { // Windows has no POSIX permission bits
@@ -134,7 +144,7 @@ func TestSaveLoadRoundTrip(t *testing.T) {
 			t.Fatalf("Stat: %v", err)
 		}
 		if perm := info.Mode().Perm(); perm != 0o600 {
-			t.Errorf("key file mode = %o, want 600 — private keys are owner-only", perm)
+			t.Errorf("key file mode = %o, want 600", perm)
 		}
 	}
 }
@@ -151,8 +161,12 @@ func TestLoadRejectsGarbage(t *testing.T) {
 			if err := os.WriteFile(path, []byte(tt.content), 0o600); err != nil {
 				t.Fatal(err)
 			}
-			if _, err := Load(path); err == nil {
-				t.Errorf("Load(%q) = nil error, want error", tt.content)
+			_, err := Load(path)
+			if err == nil {
+				t.Fatalf("Load(%q) = nil error, want error", tt.content)
+			}
+			if n := strings.Count(err.Error(), "peer: "); n != 1 {
+				t.Errorf("Load(%q) error = %q, want the package prefix once, got %d", tt.content, err, n)
 			}
 		})
 	}
@@ -176,8 +190,8 @@ func TestLoadOrGenerate(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LoadOrGenerate (second): %v", err)
 	}
-	if first.PeerID() != second.PeerID() {
-		t.Fatalf("second call gave PeerID %s, want %s", second.PeerID(), first.PeerID())
+	if first.ID() != second.ID() {
+		t.Fatalf("second call gave ID %s, want %s", second.ID(), first.ID())
 	}
 }
 
@@ -189,7 +203,10 @@ func TestLoadOrGenerateDoesNotReplaceCorruptKey(t *testing.T) {
 	if _, err := LoadOrGenerate(path); err == nil {
 		t.Fatal("LoadOrGenerate on a corrupt key file = nil error; it must not silently overwrite it")
 	}
-	data, _ := os.ReadFile(path)
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if string(data) != "corrupt\n" {
 		t.Fatalf("corrupt key file was modified to %q", data)
 	}

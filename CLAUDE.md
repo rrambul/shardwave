@@ -32,7 +32,8 @@ systems by building it. That is the goal, not a product. Source of truth is
   walkthrough, the ADR, or the commit message.
 - Standard library first. `golang.org/x` is acceptable. Anything else needs a
   reason in the commit message or an ADR.
-- Never log or print a private key or seed. Log `PeerID.Short()`.
+- Never log or print a private key or seed. Log the short peer ID
+  (`ID.Short()` in package `peer`).
 
 ## Layout
 

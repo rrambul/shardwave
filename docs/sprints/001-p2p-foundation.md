@@ -33,12 +33,12 @@ dropped on 2026-11-10.)
 
 | # | Package | What it is | What the tests pin | Go worth noticing |
 |---|---|---|---|---|
-| 1 | `internal/identity` | ed25519 keypair, `PeerID = sha256(pub)`, save/load | distinct IDs; sign/verify; save/load round-trip; corrupt key never overwritten | fixed-size array as comparable type, `%w` + `errors.Is`, `t.Helper`, `t.TempDir` |
+| 1 | `internal/peer` | ed25519 keypair, `peer.ID = sha256(pub)`, save/load | distinct IDs; sign/verify; save/load round-trip; corrupt key never overwritten | fixed-size array as comparable type, `%w` + `errors.Is`, `t.Helper`, `t.TempDir` |
 | 2 | `internal/protocol` | frame `[u32 len][u8 type][payload]`; Hello/HelloAck/Ping/Pong encoding | exact wire bytes; `io.EOF` vs `io.ErrUnexpectedEOF`; length checked before allocation; nothing written on error | `encoding/binary`, `io.ReadFull`, `BinaryMarshaler`, value vs pointer receivers |
 | 3 | `internal/transport` | the port: `Transport`, `Discovery`, `PeerEvent` — from ADR-0002 | compiles; nothing else | what a port *is* in Go: a small interface in the consumer's package |
 | 4 | `internal/transport/tcp` | the adapter: listen/dial, symmetric handshake, ping/pong liveness, events, shutdown | authenticated connect; bad signature rejected; round-trip; disconnect detected; `Close` leaks no goroutines | **the point of the sprint:** goroutine ownership, channels, `context`, `net.Conn` deadlines, `sync`, the race detector |
 | 5 | `internal/discovery/static` | peers from a flag list | returns what it was given | the pattern, not the code |
-| 6 | `internal/node` | peer table keyed by `PeerID`; wires discovery → transport; lifecycle | state transitions; shutdown order | composing components; who owns which goroutine |
+| 6 | `internal/node` | peer table keyed by `peer.ID`; wires discovery → transport; lifecycle | state transitions; shutdown order | composing components; who owns which goroutine |
 | 7 | `cmd/shardwave` | `node --listen --peers --key`; Ctrl-C → clean exit | manual: two terminals | `flag`, `signal.NotifyContext`, `log/slog` |
 | 8 | cross-machine | `make windows`, copy the `.exe`, same handshake over the LAN | manual | `GOOS`/`GOARCH`, firewalls, reality |
 
@@ -131,7 +131,7 @@ Read before step 4, then again after your first green version.
 - `os/signal` — <https://pkg.go.dev/os/signal> — `signal.NotifyContext` turns
   Ctrl-C into context cancellation; the whole program unwinds from there.
 - `log/slog` — <https://pkg.go.dev/log/slog> — structured logging. Log the
-  `PeerID.Short()`; never log a private key.
+  short peer ID (`ID.Short()`); never log a private key.
 
 ### Cryptography used in steps 1 and 4
 
@@ -152,7 +152,7 @@ Read before step 4, then again after your first green version.
 
 ## Progress
 
-- [x] 1 `identity`
+- [x] 1 `peer` (was `identity`; renamed 2026-11-12 to drop the `identity.PeerID` stutter)
 - [x] 2 `protocol` — awaiting review
 - [ ] 3 `transport` (port)
 - [ ] 4 `transport/tcp`

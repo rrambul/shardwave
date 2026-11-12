@@ -25,8 +25,9 @@ reasoning, which is usually better than the rule.
 - `MixedCaps` or `mixedCaps`, never underscores. [EG]
 - Package names: one short lowercase word, no `util`, `common`, `helpers`,
   `models`. The package name is part of every identifier's name, so
-  `protocol.Frame`, not `protocol.ProtocolFrame`. [CRC] [GSG]
-- Initialisms keep their case: `PeerID`, `peerID`, `HTTPServer`. Never `PeerId`. [CRC]
+  `protocol.Frame`, not `protocol.ProtocolFrame`, and `peer.ID`, not
+  `peer.PeerID`. [CRC] [GSG]
+- Initialisms keep their case: `ID`, `peerID`, `HTTPServer`. Never `Id`. [CRC]
 - Receiver names are one or two letters, the same for every method on the
   type, never `this` or `self`. [CRC]
 - No `Get` prefix on getters. One-method interfaces end in `-er`. [EG]
@@ -78,9 +79,11 @@ reasoning, which is usually better than the rule.
 
 ## 7. Receivers and values
 
-- All methods on a type use the same receiver kind. [CRC]
+- All methods on a type use the same receiver kind: once one of them needs a
+  pointer, they all take one. [CRC] [Go FAQ, *Should I define methods on
+  values or pointers?*]
 - Pointer receiver if the method mutates, the struct is large, or it contains
-  a `sync` type. Value receiver for small immutable types such as `PeerID`
+  a `sync` type. Value receiver for small immutable types such as `peer.ID`
   and `MsgType`. [CRC]
 - Never copy a value that contains a `sync.Mutex` or `sync.WaitGroup`; `go vet copylocks` catches most cases. [GSG]
 
@@ -140,4 +143,4 @@ reasoning, which is usually better than the rule.
 
 - `log/slog`, structured key/value pairs. [pkg.go.dev/log/slog]
 - Libraries return errors; `cmd/` logs them. [UBER]
-- Log `PeerID.Short()`. Never a private key, a seed, or a full payload.
+- Log the short peer ID (`ID.Short()`). Never a private key, a seed, or a full payload.
