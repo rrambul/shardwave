@@ -1,0 +1,42 @@
+# golangci-lint v2. This is the floor, not the ceiling: docs/GO_STYLE.md covers
+# what no linter can check. Pinned version lives in the Makefile and ci.yml.
+version: "2"
+
+linters:
+  default: standard # errcheck, govet, ineffassign, staticcheck, unused
+  enable:
+    - errorlint # %w, errors.Is/As instead of == and type assertions on errors
+    - exhaustive # a switch over an enum covers every case
+    - gocritic # assorted correctness and style diagnostics
+    - gosec # file permissions, integer conversions, weak crypto
+    - misspell
+    - nilerr # returning nil when err != nil
+    - noctx # network calls that ignore context
+    - nolintlint # every nolint names a linter and gives a reason
+    - prealloc
+    - predeclared # shadowing len, new, copy, …
+    - revive # Go Code Review Comments: doc comments, naming, receivers
+    - thelper # test helpers call t.Helper() first
+    - unconvert
+    - unparam
+    - usetesting # t.TempDir, t.Context, t.Setenv over the os equivalents
+    - wastedassign
+  settings:
+    exhaustive:
+      default-signifies-exhaustive: true
+    gosec:
+      excludes:
+        - G304 # reading a file whose path came from a flag is the point of --key
+  exclusions:
+    presets:
+      - std-error-handling # unchecked errors on Close, Print, …
+
+formatters:
+  enable:
+    - gofmt
+    - gofumpt
+    - goimports
+  settings:
+    goimports:
+      local-prefixes:
+        - github.com/rrambul/shardwave
